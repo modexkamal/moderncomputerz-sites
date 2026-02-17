@@ -1,0 +1,107 @@
+package main
+
+import (
+	"encoding/csv"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"net/smtp"
+	"os"
+	"regexp"
+	"strings"
+
+	"github.com/gorilla/mux"
+)
+
+type EmailRequest struct {
+	Email string `json:"email"`
+}
+
+type EmailResponse struct {
+	Status string `json:"status"`
+}
+
+func main() {
+	router := mux.NewRouter()
+
+	router.HandleFunc("/verify", VerifyEmail).Methods("POST")
+	router.HandleFunc("/bulk", BulkVerify).Methods("POST")
+
+	fmt.Println("Server running on port 8080")
+	log.Fatal(http.ListenAndServe(":8080", router))
+}
+
+func VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var req EmailRequest
+	json.NewDecoder(r.Body).Decode(&req)
+
+	result := CheckEmail(req.Email)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(EmailResponse{Status: result})
+}
+
+func BulkVerify(w http.ResponseWriter, r *http.Request) {
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "file error", 400)
+		return
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, _ := reader.ReadAll()
+
+	results := make([]EmailResponse, 0)
+
+	for _, row := range records {
+		if len(row) > 0 {
+			email := row[0]
+			status := CheckEmail(email)
+			results = append(results, EmailResponse{Status: email + " ? " + status})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
+func CheckEmail(email string) string {
+
+	if !isValidFormat(email) {
+		return "invalid-format"
+	}
+
+	domain := email[strings.LastIndex(email, "@")+1:]
+
+	mxRecords, err := net.LookupMX(domain)
+	if err != nil || len(mxRecords) == 0 {
+		return "invalid-mx"
+	}
+
+	mxHost := mxRecords[0].Host
+
+	c, err := smtp.Dial(mxHost + ":25")
+	if err != nil {
+		return "smtp-connection-failed"
+	}
+
+	defer c.Close()
+
+	c.Hello("localhost")
+	c.Mail("test@example.com")
+	err = c.Rcpt(email)
+
+	if err != nil {
+		return "email-invalid"
+	}
+
+	return "email-valid"
+}
+
+func isValidFormat(email string) bool {
+	regex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[A-Za-z]{2,}$`)
+	return regex.MatchString(email)
+}

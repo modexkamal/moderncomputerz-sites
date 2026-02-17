@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FF Checker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h1>FF Checker - Email Validation</h1>
+
+<div class="box">
+    <input id="emailInput" placeholder="Enter Email">
+    <button onclick="verifyEmail()">Verify</button>
+    <p id="result"></p>
+</div>
+
+<div class="box">
+    <h3>Bulk Email Checker</h3>
+    <input type="file" id="csvFile">
+    <button onclick="uploadCSV()">Upload</button>
+    <pre id="bulkResult"></pre>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
